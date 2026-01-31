@@ -108,6 +108,7 @@ def normalize_text(text):
     text = re.sub("[إأآا]", "ا", text)
     text = re.sub("ة", "ه", text)
     text = re.sub("ى", "ي", text)
+    # Important: Replace punctuation with SPACE
     text = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -121,13 +122,16 @@ def strip_text(text):
 def fetch_settings_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = None
+    
+    # 1. Try local file first
     try: creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
     except:
+        # 2. Try Streamlit Secrets
         try: creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(st.secrets["gcp_service_account"]), scope)
         except: pass
 
-    empty_res = (False, [], [], [], {}, {}, {}, pd.DataFrame(), [], [])
-    if not creds: return empty_res
+    # Return: (Success, ErrorMsg, ...Data...)
+    if not creds: return (False, "No Credentials Found", [], [], {}, {}, {}, pd.DataFrame(), [], [])
 
     client = gspread.authorize(creds)
     SETTINGS_ID = "15YTSsTS7xspjzyfRWI9vVdiKAMxY125sGinpF4NeTD0" 
@@ -138,7 +142,8 @@ def fetch_settings_data():
         def find_worksheet_case_insensitive(sheet_name):
             all_sheets = sh.worksheets()
             for ws in all_sheets:
-                if ws.title.strip().lower() == sheet_name.strip().lower(): return ws
+                if ws.title.strip().lower() == sheet_name.strip().lower():
+                    return ws
             return None
 
         def get_data(sheet_names_list, skip_row=False):
@@ -162,12 +167,13 @@ def fetch_settings_data():
 
         term_dict = {}
         stripped_term_dict = {}
-        debug_table = []
+        debug_info = {'term_count': 0}
         
         term_wks = find_worksheet_case_insensitive("Terminology")
         if term_wks:
             raw_term = term_wks.get_all_values()
             if len(raw_term) > 1:
+                # Column A = English, Column B = Arabic
                 for r in raw_term[1:]: 
                     if len(r) >= 2:
                         src, tgt = str(r[0]), str(r[1])
@@ -181,9 +187,8 @@ def fetch_settings_data():
                             term_dict[n_tgt] = src.strip()
                             stripped_term_dict[s_src] = tgt.strip()
                             stripped_term_dict[s_tgt] = src.strip()
-                            
-                            if len(debug_table) < 50:
-                                debug_table.append({"En": src, "Ar": tgt})
+            
+            debug_info['term_count'] = len(term_dict) // 2
 
         desc_lib_df = pd.DataFrame(columns=['Item Name', 'Eng Desc', 'Arb Desc'])
         lib_wks = find_worksheet_case_insensitive("Description_Library")
@@ -197,10 +202,10 @@ def fetch_settings_data():
             if clean_lib:
                 desc_lib_df = pd.DataFrame(clean_lib, columns=['Item Name', 'Eng Desc', 'Arb Desc'])
 
-        return True, debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao
+        return True, "Connected", generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao
 
     except Exception as e: 
-        return False, [], [], [], {}, {}, {}, pd.DataFrame(), [], []
+        return False, str(e), [], [], {}, {}, {}, pd.DataFrame(), [], []
 
 # --- TRANSLATION HELPER ---
 def translate_word_safe(word, src_lang, tgt_lang):
@@ -216,14 +221,14 @@ def translate_word_safe(word, src_lang, tgt_lang):
         except: continue
     return word_clean
 
-# --- SEARCH LOGIC (TOKEN-WISE) ---
+# --- SEARCH LOGIC (Token-wise + Smart Fallback) ---
 def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_google, source_lang):
     if not input_word: return "", ""
     
     norm_input = normalize_text(input_word)
     stripped = strip_text(input_word)
     
-    # 1. Exact Match
+    # 1. Exact & Stripped
     if norm_input in term_dict: return term_dict[norm_input], "Terminology (Exact)"
     if stripped in stripped_term_dict: return stripped_term_dict[stripped], "Terminology (Stripped)"
     
@@ -232,14 +237,26 @@ def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_goog
         sing = norm_input[:-1]
         if sing in term_dict: return term_dict[sing], "Terminology (Singular)"
     
-    # 3. Token-wise Search (Optimization: Check only if length reasonable)
+    # 3. Token-wise Fuzzy (For "Drumsticks" vs "Chicken Drumsticks")
     best_match_val = None
     best_match_score = 0
     
-    # Iterate keys? This is slow for bulk.
-    # For bulk, we rely more on exact/singular matches. Fuzzy is for single lookups or desperation.
-    # To speed up bulk, we skip full dictionary scan for every word.
-    
+    # Check if input is a substring of any key (Fast check)
+    # OR check similarity
+    for key, val in term_dict.items():
+        # Optimization: Only check if lengths are somewhat close or token match
+        key_tokens = key.split()
+        for token in key_tokens:
+            score = fuzz.ratio(norm_input, token)
+            if score >= 90: return val, "Terminology (Token Match)"
+            if score > best_match_score:
+                best_match_score = score
+                best_match_val = val
+
+    # 4. Fuzzy
+    if best_match_score >= 85: return best_match_val, "Terminology (Fuzzy)"
+
+    # 5. Google
     if allow_google:
         tgt = 'ar' if source_lang == 'English' else 'en'
         try:
@@ -250,76 +267,61 @@ def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_goog
     else:
         return input_word, "Not Found"
 
-# --- BULK TRANSLATION (WITH CACHING) ---
-def translate_text_bulk_cached(text, term_dict, stripped_term_dict, source_lang, cache):
+# --- BULK TRANSLATION ---
+def translate_text_with_priority(text, term_dict, stripped_term_dict, source_lang):
     if not text or pd.isna(text): return text, "None"
     text_str = str(text).strip()
     norm = normalize_text(text_str)
     
-    # Whole sentence check
+    # 1. Full Sentence Check
     if norm in term_dict: return term_dict[norm], "Terminology"
     if strip_text(text_str) in stripped_term_dict: return stripped_term_dict[strip_text(text_str)], "Terminology"
     
-    words = text_str.split()
-    translated_parts = []
-    sources = []
+    # 2. Squeeze Algorithm (Longest Match)
+    all_keys = sorted(term_dict.keys(), key=len, reverse=True)
+    placeholders = {}
+    counter = 1000
+    used_terminology = False
     
-    src_code = 'en' if source_lang == 'English' else 'ar'
+    processing_text = norm 
+    
+    for key in all_keys:
+        if len(key) < 3: continue 
+        if key in processing_text:
+            token = f" __{counter}__ "
+            placeholders[token.strip()] = term_dict[key]
+            processing_text = processing_text.replace(key, token)
+            counter += 1
+            used_terminology = True
+            
+    chunks = processing_text.split()
+    final_output_parts = []
+    
     tgt_code = 'ar' if source_lang == 'English' else 'en'
+    src_code = 'en' if source_lang == 'English' else 'ar'
+    used_google = False
     
-    for w in words:
-        clean_w = w.strip(string.punctuation)
-        if not clean_w:
-            translated_parts.append(w)
-            continue
-            
-        # CHECK CACHE
-        if clean_w in cache:
-            trans, src = cache[clean_w]
-            translated_parts.append(trans)
-            sources.append(src)
-            continue
-            
-        # If not in cache, resolve it
-        # Try Dictionary First
-        norm_w = normalize_text(clean_w)
-        if norm_w in term_dict:
-            res, src = term_dict[norm_w], "Terminology"
-        else:
-            # Singular check
-            if norm_w.endswith('s') and norm_w[:-1] in term_dict:
-                res, src = term_dict[norm_w[:-1]], "Terminology"
+    for chunk in chunks:
+        if re.match(r'^__\d+__$', chunk):
+            if chunk in placeholders:
+                final_output_parts.append(placeholders[chunk])
             else:
-                # Google
-                try:
-                    res = GoogleTranslator(source='auto', target=tgt_code).translate(clean_w)
-                    src = "Google"
-                except:
-                    res = clean_w
-                    src = "Error"
-        
-        # Save to cache
-        cache[clean_w] = (res, src)
-        translated_parts.append(res)
-        sources.append(src)
+                final_output_parts.append(chunk)
+        else:
+            if len(chunk) < 2 and not chunk.isdigit(): continue
+            try:
+                tr = translate_word_safe(chunk, src_code, tgt_code)
+                final_output_parts.append(tr)
+                used_google = True
+            except:
+                final_output_parts.append(chunk)
+            
+    final_text = " ".join(final_output_parts)
+    final_text = re.sub(r'\s+', ' ', final_text).strip()
     
-    rough_translation = " ".join(translated_parts)
-    
-    # Grammar Polish
-    final_polished = rough_translation
-    if "Google" in sources:
-        try:
-            polished = GoogleTranslator(source='auto', target=tgt_code).translate(rough_translation)
-            if len(polished) > len(rough_translation) * 0.5:
-                final_polished = polished
-        except: pass
-        
-    final_polished = re.sub(r'\s+', ' ', final_polished).strip()
-    final_source = "Terminology" if "Google" not in sources else "Terminology + Google"
-    
-    return final_polished, final_source
+    return final_text, "Terminology + Google" if used_google else "Terminology"
 
-# --- VALIDATION ---
+# --- VALIDATION (Updated Rules) ---
 def check_mismatch(name, desc):
     n = name.lower()
     d = desc.lower()
@@ -363,6 +365,7 @@ def validate_item(row, sheet_type, generic_words, forbidden_words, ad_words, des
                 return [f"🇬🇧 {r['Eng Desc']}\n\n🇸🇦 {r['Arb Desc']}" for _, r in matches.iterrows()]
         return []
 
+    # 1. FORBIDDEN
     check_forbidden = forbidden_words + ['pig', 'ham', 'naughty', 'dirty', 'fucking']
     bacon_is_safe = False
     if 'bacon' in combined_text:
@@ -374,19 +377,16 @@ def validate_item(row, sheet_type, generic_words, forbidden_words, ad_words, des
     for word in check_forbidden:
         w_clean = normalize_text(word)
         if not w_clean: continue
-        
-        # Check Name
         if w_clean in name_norm:
              if w_clean == 'bacon' and bacon_is_safe: continue
              if (w_clean == 'blue curacao' or w_clean == 'curacao') and curacao_is_safe: continue
              return False, row, f"Forbidden in Name: {word}", "Delete Item", []
-             
-        # Check Desc
         if w_clean in desc_norm:
              if w_clean == 'bacon' and bacon_is_safe: continue
              if (w_clean == 'blue curacao' or w_clean == 'curacao') and curacao_is_safe: continue
              return False, row, f"Forbidden in Desc: {word}", "Delete Desc & Replace", get_suggestions(item_name)
 
+    # 2. CHOICES
     choice_separators = ['/', '\\', ' or ', ' OR ']
     has_separator = any(s in desc_raw_lower for s in choice_separators)
     choice_indicators = ['choice of', 'choice between', 'choose', 'your choice']
@@ -403,6 +403,7 @@ def validate_item(row, sheet_type, generic_words, forbidden_words, ad_words, des
          else:
              return False, row, "Choices in SEP", "Delete Description", []
 
+    # 3. MISMATCH & GENERIC
     is_mismatch, mis_msg = check_mismatch(name_norm, desc_norm)
     if is_mismatch:
         if sheet_type == "Main Menu": return False, row, mis_msg, "Delete Item", []
@@ -414,17 +415,19 @@ def validate_item(row, sheet_type, generic_words, forbidden_words, ad_words, des
             if sheet_type == "Main Menu": return False, row, f"Generic: {word}", "Delete Item", []
             else: return False, row, f"Generic: {word}", "Delete Desc & Replace", get_suggestions(item_name)
 
+    # 4. VALUE ADDED
     name_tokens = set(name_norm.split())
     desc_tokens = set(desc_norm.split())
     extra_words = desc_tokens - name_tokens
+    
     common_fillers = {'delicious', 'tasty', 'yummy', 'amazing', 'great', 'best', 'famous', 'signature', 'special', 
                       'fresh', 'hot', 'cold', 'served', 'with', 'dish', 'plate', 'platter', 'bowl', 'cup', 'glass', 'our'}
-    active_fillers = common_fillers - ad_words
+    junk_fillers = common_fillers - ad_words
     
     if extra_words:
         all_extras_are_junk = True
         for w in extra_words:
-            if w not in active_fillers:
+            if w not in junk_fillers:
                 all_extras_are_junk = False
                 break
         if all_extras_are_junk:
@@ -455,12 +458,15 @@ def main():
     else:
         settings_res = st.session_state.settings_data
 
+    # Unpack safely
     if settings_res[0] == False:
         conn_status = False
-        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = [], [], [], set(), {}, {}, pd.DataFrame(), [], []
+        conn_msg = settings_res[1]
+        generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = [], [], set(), {}, {}, pd.DataFrame(), [], []
     else:
         conn_status = True
-        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = settings_res[1:]
+        conn_msg = "Connected"
+        generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = settings_res[2:]
 
     with st.sidebar:
         col_res, col_tit = st.columns([0.3, 0.7])
@@ -535,10 +541,6 @@ def main():
                 spin_ph = st.empty()
                 spin_ph.markdown(f'<div id="action-overlay">{spin_html}</div>', unsafe_allow_html=True)
                 
-                # --- BULK CACHE START ---
-                bulk_cache = {} 
-                # ------------------------
-                
                 try:
                     uploaded_file.seek(0)
                     if uploaded_file.name.endswith('.csv'): 
@@ -556,8 +558,6 @@ def main():
                     if 'Item Name' not in df.columns: st.error("Error mapping columns.")
                     else:
                         result_df = df.copy()
-                        total_rows = len(result_df)
-                        progress_bar = st.progress(0)
                         
                         if "Check" in action_mode:
                             result_df['Status'] = 'Valid'; result_df['Error'] = ''; result_df['Action'] = ''
@@ -567,7 +567,6 @@ def main():
                                     result_df.at[idx, 'Status'] = 'Issue'
                                     result_df.at[idx, 'Error'] = err
                                     result_df.at[idx, 'Action'] = act
-                                if idx % 10 == 0: progress_bar.progress(int(idx/total_rows*50))
 
                         if "Translate" in action_mode:
                             if target_name_col not in result_df.columns: result_df[target_name_col] = ''
@@ -576,16 +575,14 @@ def main():
                             result_df['Desc Source'] = ''
                             
                             for idx, row in result_df.iterrows():
-                                t_name, src_n = translate_text_bulk_cached(row['Item Name'], term_dict, stripped_term_dict, source_lang, bulk_cache)
-                                t_desc, src_d = translate_text_bulk_cached(row['Description'], term_dict, stripped_term_dict, source_lang, bulk_cache)
+                                t_name, src_n = translate_text_with_priority(row['Item Name'], term_dict, stripped_term_dict, source_lang)
+                                t_desc, src_d = translate_text_with_priority(row['Description'], term_dict, stripped_term_dict, source_lang)
                                 
                                 result_df.at[idx, target_name_col] = t_name
                                 result_df.at[idx, target_desc_col] = t_desc
                                 result_df.at[idx, 'Name Source'] = src_n
                                 result_df.at[idx, 'Desc Source'] = src_d
-                                if idx % 5 == 0: progress_bar.progress(50 + int(idx/total_rows*50))
                         
-                        progress_bar.progress(100)
                         display_df = result_df.copy()
                         display_df.rename(columns={'Item Name': col_name_mapped, 'Description': col_desc_mapped}, inplace=True)
                         all_sheets[current_sheet_name] = display_df
@@ -658,8 +655,18 @@ def main():
                  
              st.markdown('</div>', unsafe_allow_html=True)
 
-        # HIDDEN FOR ADMIN
-        # with st.expander("🔌 OCT-DATA", expanded=False): ...
+        with st.expander("🔌 OCT-DATA", expanded=False):
+             st.markdown('<div style="color:#111;">', unsafe_allow_html=True)
+             if conn_status:
+                 st.markdown(f"**Connection:** {conn_msg}")
+                 st.markdown(f"🚫 Forbidden: <b>{len(forbidden_words)}</b>", unsafe_allow_html=True)
+                 st.markdown(f"⚠️ Generic: <b>{len(generic_words)}</b>", unsafe_allow_html=True)
+                 st.markdown(f"✨ Ad Words: <b>{len(ad_words)}</b>", unsafe_allow_html=True)
+                 st.markdown(f"📚 Library: <b>{len(desc_lib_df)}</b>", unsafe_allow_html=True)
+                 st.markdown(f"🔤 Terms: <b>{len(term_dict)//2}</b>", unsafe_allow_html=True)
+             else: 
+                 st.error(f"Error: {conn_msg}")
+             st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.processed_data is not None:
