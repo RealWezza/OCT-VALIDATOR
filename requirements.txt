@@ -1,0 +1,9 @@
+streamlit
+pandas
+numpy
+gspread
+oauth2client
+thefuzz
+deep-translator
+openpyxl
+python-Levenshtein
