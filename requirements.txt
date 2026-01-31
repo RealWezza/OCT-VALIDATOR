@@ -1,0 +1,16 @@
+streamlit
+pandas
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+gspread
+oauth2client
+thefuzz
+openpyxl
+deep-translator
+python-bidi
+arabic-reshaper
+numpy
+pillow
+python-Levenshtein
