@@ -108,7 +108,6 @@ def normalize_text(text):
     text = re.sub("[إأآا]", "ا", text)
     text = re.sub("ة", "ه", text)
     text = re.sub("ى", "ي", text)
-    # Important: Replace punctuation with SPACE
     text = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -122,16 +121,13 @@ def strip_text(text):
 def fetch_settings_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = None
-    
-    # 1. Try local file first
     try: creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
     except:
-        # 2. Try Streamlit Secrets
         try: creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(st.secrets["gcp_service_account"]), scope)
         except: pass
 
-    # Return: (Success, ErrorMsg, ...Data...)
-    if not creds: return (False, "No Credentials Found", [], [], {}, {}, {}, pd.DataFrame(), [], [])
+    empty_res = (False, [], [], [], {}, {}, {}, pd.DataFrame(), [], [])
+    if not creds: return empty_res
 
     client = gspread.authorize(creds)
     SETTINGS_ID = "15YTSsTS7xspjzyfRWI9vVdiKAMxY125sGinpF4NeTD0" 
@@ -142,8 +138,7 @@ def fetch_settings_data():
         def find_worksheet_case_insensitive(sheet_name):
             all_sheets = sh.worksheets()
             for ws in all_sheets:
-                if ws.title.strip().lower() == sheet_name.strip().lower():
-                    return ws
+                if ws.title.strip().lower() == sheet_name.strip().lower(): return ws
             return None
 
         def get_data(sheet_names_list, skip_row=False):
@@ -167,7 +162,7 @@ def fetch_settings_data():
 
         term_dict = {}
         stripped_term_dict = {}
-        debug_info = {'term_count': 0}
+        debug_table = []
         
         term_wks = find_worksheet_case_insensitive("Terminology")
         if term_wks:
@@ -187,8 +182,8 @@ def fetch_settings_data():
                             term_dict[n_tgt] = src.strip()
                             stripped_term_dict[s_src] = tgt.strip()
                             stripped_term_dict[s_tgt] = src.strip()
-            
-            debug_info['term_count'] = len(term_dict) // 2
+                            
+                            debug_table.append({"En": src, "Ar": tgt})
 
         desc_lib_df = pd.DataFrame(columns=['Item Name', 'Eng Desc', 'Arb Desc'])
         lib_wks = find_worksheet_case_insensitive("Description_Library")
@@ -202,12 +197,12 @@ def fetch_settings_data():
             if clean_lib:
                 desc_lib_df = pd.DataFrame(clean_lib, columns=['Item Name', 'Eng Desc', 'Arb Desc'])
 
-        return True, "Connected", generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao
+        return True, debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao
 
     except Exception as e: 
-        return False, str(e), [], [], {}, {}, {}, pd.DataFrame(), [], []
+        return False, [], [], [], {}, {}, {}, pd.DataFrame(), [], []
 
-# --- TRANSLATION HELPER ---
+# --- TRANSLATION HELPER (THE FIX IS HERE) ---
 def translate_word_safe(word, src_lang, tgt_lang):
     word_clean = word.strip()
     if not word_clean: return ""
@@ -216,12 +211,13 @@ def translate_word_safe(word, src_lang, tgt_lang):
     for prompt in prompts:
         try:
             tr = GoogleTranslator(source='auto', target=tgt_lang).translate(prompt)
-            tr_clean = re.sub(r'^(Food item|Food|طعام)[:\s]*', '', tr, flags=re.IGNORECASE).strip()
+            # CRITICAL FIX: AGGRESSIVE CLEANING OF "FOOD:" PREFIXES IN ARABIC & ENGLISH
+            tr_clean = re.sub(r'^(Food item|Food|Dish|Item|طعام|الطعام|غذاء|الغذاء|الأكل|وجبة|صنف)[:\s\-\.]*', '', tr, flags=re.IGNORECASE).strip()
             return tr_clean
         except: continue
     return word_clean
 
-# --- SEARCH LOGIC (Token-wise + Smart Fallback) ---
+# --- SEARCH LOGIC (Token-wise) ---
 def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_google, source_lang):
     if not input_word: return "", ""
     
@@ -237,14 +233,10 @@ def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_goog
         sing = norm_input[:-1]
         if sing in term_dict: return term_dict[sing], "Terminology (Singular)"
     
-    # 3. Token-wise Fuzzy (For "Drumsticks" vs "Chicken Drumsticks")
+    # 3. Token-wise Fuzzy
     best_match_val = None
     best_match_score = 0
-    
-    # Check if input is a substring of any key (Fast check)
-    # OR check similarity
     for key, val in term_dict.items():
-        # Optimization: Only check if lengths are somewhat close or token match
         key_tokens = key.split()
         for token in key_tokens:
             score = fuzz.ratio(norm_input, token)
@@ -260,7 +252,8 @@ def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_goog
     if allow_google:
         tgt = 'ar' if source_lang == 'English' else 'en'
         try:
-            res = GoogleTranslator(source='auto', target=tgt).translate(input_word)
+            # Use the SAFE translate function to strip "Food:"
+            res = translate_word_safe(input_word, source_lang, tgt)
             return res, "Google"
         except:
             return "Error", "Connection"
@@ -277,7 +270,7 @@ def translate_text_with_priority(text, term_dict, stripped_term_dict, source_lan
     if norm in term_dict: return term_dict[norm], "Terminology"
     if strip_text(text_str) in stripped_term_dict: return stripped_term_dict[strip_text(text_str)], "Terminology"
     
-    # 2. Squeeze Algorithm (Longest Match)
+    # 2. Squeeze Algorithm
     all_keys = sorted(term_dict.keys(), key=len, reverse=True)
     placeholders = {}
     counter = 1000
@@ -310,6 +303,7 @@ def translate_text_with_priority(text, term_dict, stripped_term_dict, source_lan
         else:
             if len(chunk) < 2 and not chunk.isdigit(): continue
             try:
+                # Use SAFE translate here too
                 tr = translate_word_safe(chunk, src_code, tgt_code)
                 final_output_parts.append(tr)
                 used_google = True
@@ -321,7 +315,7 @@ def translate_text_with_priority(text, term_dict, stripped_term_dict, source_lan
     
     return final_text, "Terminology + Google" if used_google else "Terminology"
 
-# --- VALIDATION (Updated Rules) ---
+# --- VALIDATION ---
 def check_mismatch(name, desc):
     n = name.lower()
     d = desc.lower()
@@ -458,15 +452,14 @@ def main():
     else:
         settings_res = st.session_state.settings_data
 
-    # Unpack safely
     if settings_res[0] == False:
         conn_status = False
         conn_msg = settings_res[1]
-        generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = [], [], set(), {}, {}, pd.DataFrame(), [], []
+        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = [], [], [], set(), {}, {}, pd.DataFrame(), [], []
     else:
         conn_status = True
         conn_msg = "Connected"
-        generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = settings_res[2:]
+        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = settings_res[1:]
 
     with st.sidebar:
         col_res, col_tit = st.columns([0.3, 0.7])
@@ -646,27 +639,17 @@ def main():
                  src_lang_detect = "English"
                  if re.search(r'[\u0600-\u06FF]', termo_input): src_lang_detect = "Arabic"
                  
-                 # Using the robust token-wise search
                  res, src = search_token_wise_core(termo_input, term_dict, stripped_term_dict, allow_google, src_lang_detect) 
                  
                  spin_ph.empty()
+                 # CLEAN RESULT DISPLAY
                  st.markdown(f"<b style='color:#111; font-size:1.5em;'>{res}</b>", unsafe_allow_html=True)
                  st.caption(f"{src}")
                  
              st.markdown('</div>', unsafe_allow_html=True)
 
-        with st.expander("🔌 OCT-DATA", expanded=False):
-             st.markdown('<div style="color:#111;">', unsafe_allow_html=True)
-             if conn_status:
-                 st.markdown(f"**Connection:** {conn_msg}")
-                 st.markdown(f"🚫 Forbidden: <b>{len(forbidden_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"⚠️ Generic: <b>{len(generic_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"✨ Ad Words: <b>{len(ad_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"📚 Library: <b>{len(desc_lib_df)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"🔤 Terms: <b>{len(term_dict)//2}</b>", unsafe_allow_html=True)
-             else: 
-                 st.error(f"Error: {conn_msg}")
-             st.markdown('</div>', unsafe_allow_html=True)
+        # HIDDEN FOR ADMIN
+        # with st.expander("🔌 OCT-DATA", expanded=False): ...
         st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.processed_data is not None:
