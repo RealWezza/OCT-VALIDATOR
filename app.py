@@ -12,6 +12,7 @@ import os
 import time
 import base64
 import string
+import unicodedata
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURATION
@@ -47,77 +48,37 @@ st.markdown(f"""
     .block-container {{ padding-top: 1rem !important; margin-top: 0rem !important; }}
     .stApp {{ background: linear-gradient(180deg, #1B1B7F 0%, #0d0d40 100%); color: #E6A537; }}
     
-    /* BUBBLES ANIMATION (CIRCLES ONLY) */
-    .circles {{
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        overflow: hidden; z-index: 0; pointer-events: none;
-    }}
-    .circles li {{
-        position: absolute; display: block; list-style: none;
-        width: 20px; height: 20px; 
-        background: rgba(255, 255, 255, 0.05);
-        animation: animate 25s linear infinite; bottom: -150px;
-        border-radius: 50%;
-    }}
+    .circles {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; z-index: 0; pointer-events: none; }}
+    .circles li {{ position: absolute; display: block; list-style: none; width: 20px; height: 20px; background: rgba(255, 255, 255, 0.05); animation: animate 25s linear infinite; bottom: -150px; border-radius: 50%; }}
     .circles li:nth-child(1) {{ left: 25%; width: 80px; height: 80px; animation-delay: 0s; }}
     .circles li:nth-child(2) {{ left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }}
     .circles li:nth-child(3) {{ left: 70%; width: 20px; height: 20px; animation-delay: 4s; }}
     .circles li:nth-child(4) {{ left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }}
     .circles li:nth-child(5) {{ left: 65%; width: 20px; height: 20px; animation-delay: 0s; }}
-    
-    @keyframes animate {{
-        0% {{ transform: translateY(0) rotate(0deg); opacity: 1; }}
-        100% {{ transform: translateY(-1000px) rotate(720deg); opacity: 0; }}
-    }}
+    @keyframes animate {{ 0% {{ transform: translateY(0) rotate(0deg); opacity: 1; }} 100% {{ transform: translateY(-1000px) rotate(720deg); opacity: 0; }} }}
 
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] {{
-        background-color: #E6A537 !important;
-        border-right: 3px solid #111111;
-        width: 350px !important; min-width: 350px !important; z-index: 1;
-    }}
+    section[data-testid="stSidebar"] {{ background-color: #E6A537 !important; border-right: 3px solid #111111; width: 350px !important; min-width: 350px !important; z-index: 1; }}
     section[data-testid="stSidebar"] * {{ color: #111111 !important; }}
-
-    /* RESET BUTTON (White BG, Blue Text) */
-    div.stButton > button[kind="secondary"] {{
-        background-color: #FFFFFF !important; color: #1B1B7F !important;
-        border: 2px solid #1B1B7F !important; border-radius: 8px; 
-        padding: 6px 15px; width: auto; font-weight: bold;
-    }}
+    
+    div.stButton > button[kind="secondary"] {{ background-color: #FFFFFF !important; color: #1B1B7F !important; border: 2px solid #1B1B7F !important; border-radius: 8px; padding: 6px 15px; width: 100%; font-weight: bold; }}
     div.stButton > button[kind="secondary"]:hover {{ background-color: #f0f0f0 !important; }}
-
-    /* FILE UPLOADER */
+    
     [data-testid="stFileUploader"] section {{ background-color: #FFFFFF !important; border: 2px dashed #1B1B7F; border-radius: 10px; }}
     [data-testid="stFileUploader"] section > div, [data-testid="stFileUploader"] section span {{ color: #000000 !important; }}
     [data-testid="stFileUploader"] button {{ background-color: #E6A537 !important; color: #111111 !important; border: 1px solid #111; }}
-
-    /* TRANSPARENT CARDS */
-    .manual-card, .right-tools-box {{
-        background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 15px;
-        border: 1px solid rgba(230, 165, 55, 0.3); margin-bottom: 20px; backdrop-filter: blur(5px);
-    }}
+    
+    .manual-card, .right-tools-box {{ background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 15px; border: 1px solid rgba(230, 165, 55, 0.3); margin-bottom: 20px; backdrop-filter: blur(5px); }}
     .manual-card h3, .manual-card label, .right-tools-box div {{ color: #E6A537 !important; }}
-
-    /* INPUTS */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {{
-        background-color: #FFFFFF !important; color: #111111 !important;
-        border: 2px solid #1B1B7F !important; font-weight: bold;
-    }}
-
-    /* BUTTONS */
-    div.stButton > button[kind="primary"] {{
-        background-color: #E6A537 !important; color: #FFFFFF !important;
-        font-weight: 900 !important; border: 2px solid #FFFFFF; border-radius: 8px; width: 100%;
-        text-shadow: 1px 1px #111;
-    }}
-    div.stButton > button[kind="primary"]:hover {{
-        background-color: #111111 !important; color: #E6A537 !important; border-color: #E6A537;
-    }}
-
-    /* LOADING */
+    
+    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {{ background-color: #FFFFFF !important; color: #111111 !important; border: 2px solid #1B1B7F !important; font-weight: bold; }}
+    
+    div.stButton > button[kind="primary"] {{ background-color: #E6A537 !important; color: #FFFFFF !important; font-weight: 900 !important; border: 2px solid #FFFFFF; border-radius: 8px; width: 100%; text-shadow: 1px 1px #111; }}
+    div.stButton > button[kind="primary"]:hover {{ background-color: #111111 !important; color: #E6A537 !important; border-color: #E6A537; }}
+    
     #loading-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #1B1B7F; z-index: 9999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
-    #action-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(27, 27, 127, 0.7); backdrop-filter: blur(8px); z-index: 9999999; display: flex; justify-content: center; align-items: center; }}
-    .loading-text {{ color: #E6A537; font-weight: bold; font-size: 1.5rem; margin-top: 20px; text-shadow: 2px 2px #000; }}
+    #action-overlay {{ position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(27, 27, 127, 0.7); backdrop-filter: blur(8px); z-index: 9999999; display: flex; flex-direction: column; justify-content: center; align-items: center; }}
+    .loading-content {{ text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; }}
+    .loading-text {{ color: #E6A537 !important; font-weight: 900; font-size: 1.8rem; margin-top: 15px; text-shadow: 2px 2px #000; text-align: center; font-family: sans-serif; }}
     .loading-logo-img {{ width: 140px; animation: pulse 1.5s infinite; }}
     .action-logo-spin {{ width: 140px; animation: spin 3s linear infinite; }}
     
@@ -129,7 +90,6 @@ st.markdown(f"""
     .header-title {{ font-family: sans-serif; font-weight: 900; font-size: 3.5em; line-height: 1; text-shadow: 4px 4px 0px #111111; }}
     .title-oct {{ color: #E6A537; }}
     .title-val {{ color: #E6A537; }}
-
     footer {{ visibility: hidden; }}
     </style>
 """, unsafe_allow_html=True)
@@ -140,6 +100,23 @@ st.markdown("""<ul class="circles"><li></li><li></li><li></li><li></li><li></li>
 # 3. LOGIC & DATA
 # -----------------------------------------------------------------------------
 
+def normalize_text(text):
+    if not isinstance(text, str): return str(text)
+    text = unicodedata.normalize('NFKC', text)
+    text = text.lower()
+    text = re.sub(r'[\u064B-\u065F\u0640]', '', text) 
+    text = re.sub("[إأآا]", "ا", text)
+    text = re.sub("ة", "ه", text)
+    text = re.sub("ى", "ي", text)
+    text = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def strip_text(text):
+    if not isinstance(text, str): return str(text)
+    norm = normalize_text(text)
+    return re.sub(r'\s+', '', norm)
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_settings_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -149,7 +126,7 @@ def fetch_settings_data():
         try: creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(st.secrets["gcp_service_account"]), scope)
         except: pass
 
-    empty_res = (None, [], [], [], {}, pd.DataFrame(), [], [])
+    empty_res = (False, [], [], [], {}, {}, {}, pd.DataFrame(), [], [])
     if not creds: return empty_res
 
     client = gspread.authorize(creds)
@@ -158,143 +135,304 @@ def fetch_settings_data():
     try:
         sh = client.open_by_key(SETTINGS_ID)
         
-        def get_data(sheet_names, skip_row=False):
-            for name in sheet_names:
-                try:
-                    wks = sh.worksheet(name)
-                    rows = wks.get_all_values()
-                    if not rows: continue
-                    data = rows[1:] if skip_row and len(rows) > 1 else rows
-                    clean = [str(cell).strip().lower() for row in data for cell in row if str(cell).strip()]
-                    if clean: return clean
-                except: continue
-            return []
+        def find_worksheet_case_insensitive(sheet_name):
+            all_sheets = sh.worksheets()
+            for ws in all_sheets:
+                if ws.title.strip().lower() == sheet_name.strip().lower(): return ws
+            return None
 
-        generic_words = get_data(["Generic_Words", "Generic", "Generic Words"], False)
-        ad_words = get_data(["Ad_Words", "Ads", "Ad Words"], False)
-        forbidden_words = get_data(["Forbidden_Words", "Forbidden", "Forbidden Words"], True)
+        def get_data(sheet_names_list, skip_row=False):
+            wks = None
+            for name in sheet_names_list:
+                wks = find_worksheet_case_insensitive(name)
+                if wks: break
+            if not wks: return []
+            rows = wks.get_all_values()
+            if not rows: return []
+            data = rows[1:] if skip_row and len(rows) > 1 else rows
+            clean = [str(cell).strip().lower() for row in data for cell in row if str(cell).strip()]
+            return clean
+
+        generic_words = get_data(["Generic_Words", "Generic"], False)
+        ad_words_raw = get_data(["Ad_Words", "Ads"], False)
+        ad_words = set([normalize_text(w) for w in ad_words_raw])
+        forbidden_words = get_data(["Forbidden_Words", "Forbidden"], True)
         safe_bacon = get_data(["Safe_Bacon", "Safe Bacon"], False) 
         safe_curacao = get_data(["Safe_Curacao", "Safe Curacao"], False)
 
         term_dict = {}
-        try: 
-            raw_term = sh.worksheet("Terminology").get_all_values()
-            if len(raw_term) > 2:
-                for r in raw_term[2:]:
+        stripped_term_dict = {}
+        debug_table = []
+        
+        term_wks = find_worksheet_case_insensitive("Terminology")
+        if term_wks:
+            raw_term = term_wks.get_all_values()
+            if len(raw_term) > 1:
+                for r in raw_term[1:]: 
                     if len(r) >= 2:
-                        src, tgt = str(r[0]).strip(), str(r[1]).strip()
-                        if src and tgt:
-                            # Store exact keys
-                            term_dict[src.lower()] = tgt
-                            term_dict[tgt.lower()] = src
-                            # Store simplified keys for searching
-                            term_dict[normalize_text(src)] = tgt
-                            term_dict[normalize_text(tgt)] = src
-        except: pass
+                        src, tgt = str(r[0]), str(r[1])
+                        if src.strip() and tgt.strip():
+                            n_src = normalize_text(src)
+                            n_tgt = normalize_text(tgt)
+                            s_src = strip_text(src)
+                            s_tgt = strip_text(tgt)
+                            
+                            term_dict[n_src] = tgt.strip()
+                            term_dict[n_tgt] = src.strip()
+                            stripped_term_dict[s_src] = tgt.strip()
+                            stripped_term_dict[s_tgt] = src.strip()
+                            
+                            if len(debug_table) < 50:
+                                debug_table.append({"En": src, "Ar": tgt})
 
-        try: 
-            raw_lib = sh.worksheet("Description_Library").get_all_values()
+        desc_lib_df = pd.DataFrame(columns=['Item Name', 'Eng Desc', 'Arb Desc'])
+        lib_wks = find_worksheet_case_insensitive("Description_Library")
+        if lib_wks:
+            raw_lib = lib_wks.get_all_values()
             clean_lib = []
             if len(raw_lib) > 1:
                 for r in raw_lib[1:]:
                     if len(r) >= 3: clean_lib.append([r[0].strip(), r[1].strip(), r[2].strip()])
                     elif len(r) == 2: clean_lib.append([r[0].strip(), r[1].strip(), ""])
-            desc_lib_df = pd.DataFrame(clean_lib, columns=['Item Name', 'Eng Desc', 'Arb Desc'])
-        except: desc_lib_df = pd.DataFrame(columns=['Item Name', 'Eng Desc', 'Arb Desc'])
+            if clean_lib:
+                desc_lib_df = pd.DataFrame(clean_lib, columns=['Item Name', 'Eng Desc', 'Arb Desc'])
 
-        return True, generic_words, forbidden_words, ad_words, term_dict, desc_lib_df, safe_bacon, safe_curacao
+        return True, debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao
 
-    except: return empty_res
+    except Exception as e: 
+        return False, [], [], [], {}, {}, {}, pd.DataFrame(), [], []
 
-def normalize_text(text):
-    if not isinstance(text, str): return str(text)
-    # Basic normalization for matching
-    text = text.translate(str.maketrans('', '', string.punctuation))
-    text = re.sub("[إأآا]", "ا", text)
-    text = re.sub("ة", "ه", text)
-    text = re.sub("ى", "ي", text)
-    return text.strip().lower()
-
-# --- SAFE GOOGLE TRANSLATE ---
+# --- TRANSLATION HELPER ---
 def translate_word_safe(word, src_lang, tgt_lang):
     word_clean = word.strip()
     if not word_clean: return ""
-    
-    # Emergency Fixes
-    if src_lang == 'ar':
-        if "توفى" in word_clean or "توفي" in word_clean: return "Toffee"
-        
     prompts = [f"Food: {word_clean}", word_clean]
     if src_lang == 'ar': prompts = [f"Food item: {word_clean}", word_clean]
-    
     for prompt in prompts:
         try:
             tr = GoogleTranslator(source='auto', target=tgt_lang).translate(prompt)
             tr_clean = re.sub(r'^(Food item|Food|طعام)[:\s]*', '', tr, flags=re.IGNORECASE).strip()
-            if tr_clean and tr_clean.lower() != word_clean.lower(): return tr_clean
+            return tr_clean
         except: continue
     return word_clean
 
-# --- THE LOGIC YOU REQUESTED ---
-def translate_text_loop_logic(text, term_dict, source_lang):
+# --- SEARCH LOGIC (TOKEN-WISE) ---
+def search_token_wise_core(input_word, term_dict, stripped_term_dict, allow_google, source_lang):
+    if not input_word: return "", ""
+    
+    norm_input = normalize_text(input_word)
+    stripped = strip_text(input_word)
+    
+    # 1. Exact Match
+    if norm_input in term_dict: return term_dict[norm_input], "Terminology (Exact)"
+    if stripped in stripped_term_dict: return stripped_term_dict[stripped], "Terminology (Stripped)"
+    
+    # 2. Singular/Plural
+    if norm_input.endswith('s') and len(norm_input) > 3:
+        sing = norm_input[:-1]
+        if sing in term_dict: return term_dict[sing], "Terminology (Singular)"
+    
+    # 3. Token-wise Search (Optimization: Check only if length reasonable)
+    best_match_val = None
+    best_match_score = 0
+    
+    # Iterate keys? This is slow for bulk.
+    # For bulk, we rely more on exact/singular matches. Fuzzy is for single lookups or desperation.
+    # To speed up bulk, we skip full dictionary scan for every word.
+    
+    if allow_google:
+        tgt = 'ar' if source_lang == 'English' else 'en'
+        try:
+            res = GoogleTranslator(source='auto', target=tgt).translate(input_word)
+            return res, "Google"
+        except:
+            return "Error", "Connection"
+    else:
+        return input_word, "Not Found"
+
+# --- BULK TRANSLATION (WITH CACHING) ---
+def translate_text_bulk_cached(text, term_dict, stripped_term_dict, source_lang, cache):
     if not text or pd.isna(text): return text, "None"
     text_str = str(text).strip()
-    if not text_str: return "", "None"
+    norm = normalize_text(text_str)
     
-    # 1. Split Sentence into Words (FIX: Ensuring it's a list of words)
-    # Using simple split to avoid character iteration bug
-    words = text_str.split() 
+    # Whole sentence check
+    if norm in term_dict: return term_dict[norm], "Terminology"
+    if strip_text(text_str) in stripped_term_dict: return stripped_term_dict[strip_text(text_str)], "Terminology"
     
-    translated_words = []
+    words = text_str.split()
+    translated_parts = []
+    sources = []
+    
     src_code = 'en' if source_lang == 'English' else 'ar'
     tgt_code = 'ar' if source_lang == 'English' else 'en'
     
-    term_keys_norm = list(term_dict.keys())
-    
-    for word in words:
-        # Clean the word from attached punctuation for lookup
-        clean_word = word.strip(string.punctuation)
-        norm_word = normalize_text(clean_word)
-        
-        found_translation = None
-        
-        # A. Exact Match in Terminology
-        if norm_word in term_dict:
-            found_translation = term_dict[norm_word]
-        
-        # B. Fuzzy Match (85%) if not found
-        if not found_translation and len(norm_word) > 2:
-            match = process.extractOne(norm_word, term_keys_norm, scorer=fuzz.ratio)
-            if match and match[1] >= 85:
-                found_translation = term_dict[match[0]]
-        
-        # C. Google Translate if still not found
-        if not found_translation:
-            # Use the safe google translation with "Food:" context
-            found_translation = translate_word_safe(clean_word, src_code, tgt_code)
+    for w in words:
+        clean_w = w.strip(string.punctuation)
+        if not clean_w:
+            translated_parts.append(w)
+            continue
             
-        translated_words.append(found_translation)
-
-    # 4. Assembly & Grammar Fix
-    rough_sentence = " ".join(translated_words)
+        # CHECK CACHE
+        if clean_w in cache:
+            trans, src = cache[clean_w]
+            translated_parts.append(trans)
+            sources.append(src)
+            continue
+            
+        # If not in cache, resolve it
+        # Try Dictionary First
+        norm_w = normalize_text(clean_w)
+        if norm_w in term_dict:
+            res, src = term_dict[norm_w], "Terminology"
+        else:
+            # Singular check
+            if norm_w.endswith('s') and norm_w[:-1] in term_dict:
+                res, src = term_dict[norm_w[:-1]], "Terminology"
+            else:
+                # Google
+                try:
+                    res = GoogleTranslator(source='auto', target=tgt_code).translate(clean_w)
+                    src = "Google"
+                except:
+                    res = clean_w
+                    src = "Error"
+        
+        # Save to cache
+        cache[clean_w] = (res, src)
+        translated_parts.append(res)
+        sources.append(src)
     
-    final_polished = rough_sentence
-    try:
-        # Send the "Bag of words" to Google to fix the grammar/order
-        polished = GoogleTranslator(source='auto', target=tgt_code).translate(rough_sentence)
-        # Safety: If result is too short, keep rough
-        if len(polished) > len(rough_sentence) * 0.5:
-            final_polished = polished
-    except: pass
-
-    # Clean up spaces
+    rough_translation = " ".join(translated_parts)
+    
+    # Grammar Polish
+    final_polished = rough_translation
+    if "Google" in sources:
+        try:
+            polished = GoogleTranslator(source='auto', target=tgt_code).translate(rough_translation)
+            if len(polished) > len(rough_translation) * 0.5:
+                final_polished = polished
+        except: pass
+        
     final_polished = re.sub(r'\s+', ' ', final_polished).strip()
+    final_source = "Terminology" if "Google" not in sources else "Terminology + Google"
     
-    return final_polished, "Loop+Fuzzy+Google"
+    return final_polished, final_source
 
-# --- LOGIC FUNCTIONS ---
+# --- VALIDATION ---
+def check_mismatch(name, desc):
+    n = name.lower()
+    d = desc.lower()
+    conflicts = [
+        (['chicken', 'poultry'], ['beef', 'meat', 'lamb', 'fish', 'seafood', 'prawn', 'shrimp']),
+        (['beef', 'meat', 'lamb', 'steak'], ['chicken', 'poultry', 'fish', 'seafood', 'prawn', 'shrimp']),
+        (['fish', 'seafood', 'prawn', 'shrimp', 'salmon', 'tuna'], ['chicken', 'poultry', 'beef', 'meat', 'lamb']),
+        (['vegetable', 'veggie', 'vegan'], ['chicken', 'beef', 'meat', 'lamb', 'fish', 'bacon', 'prawn']),
+        (['hot', 'warm', 'steamed', 'grilled'], ['iced', 'cold', 'frozen', 'chilled', 'frosty']),
+        (['iced', 'cold', 'frozen', 'chilled'], ['hot', 'warm', 'steamed']),
+        (['mocha', 'latte', 'coffee', 'espresso', 'cappuccino', 'frappe', 'macchiato'], 
+         ['beef', 'chicken', 'meat', 'lamb', 'burger', 'steak', 'fish', 'prawn', 'rice', 'pasta', 'sandwich'])
+    ]
+    for set_a, set_b in conflicts:
+        has_a_name = any(x in n for x in set_a)
+        has_b_desc = any(x in d for x in set_b)
+        if has_a_name and has_b_desc:
+            if 'bacon' in d and ('beef' in d or 'turkey' in d): continue
+            return True, f"Mismatch: Name implies '{set_a[0]}' but Desc implies '{set_b[0]}'"
+    return False, ""
+
 def validate_item(row, sheet_type, generic_words, forbidden_words, ad_words, desc_lib_df, safe_bacon_list, safe_curacao_list):
-    # Standard Validation logic...
+    item_name = str(row.get('Item Name', '')).strip()
+    description = str(row.get('Description', '')).strip()
+    desc_raw_lower = description.lower()
+    name_norm = normalize_text(item_name)
+    desc_norm = normalize_text(description)
+    combined_text = (name_norm + " " + desc_norm).lower()
+    
+    default_safe_bacon = ['beef', 'turkey', 'veal', 'halal', 'chicken', 'lamb']
+    default_safe_curacao = ['syrup', 'flavor', 'flavour', 'mix', 'mocktail', 'virgin']
+    final_safe_bacon = list(set(safe_bacon_list + default_safe_bacon)) if safe_bacon_list else default_safe_bacon
+    final_safe_curacao = list(set(safe_curacao_list + default_safe_curacao)) if safe_curacao_list else default_safe_curacao
+
+    def get_suggestions(itm_name):
+        if desc_lib_df.empty: return []
+        match = process.extractOne(itm_name, desc_lib_df['Item Name'].astype(str).unique(), scorer=fuzz.token_sort_ratio)
+        if match and match[1] >= 90:
+            matches = desc_lib_df[desc_lib_df['Item Name'] == match[0]]
+            if not matches.empty:
+                return [f"🇬🇧 {r['Eng Desc']}\n\n🇸🇦 {r['Arb Desc']}" for _, r in matches.iterrows()]
+        return []
+
+    check_forbidden = forbidden_words + ['pig', 'ham', 'naughty', 'dirty', 'fucking']
+    bacon_is_safe = False
+    if 'bacon' in combined_text:
+        if any(safe in combined_text for safe in final_safe_bacon): bacon_is_safe = True
+    curacao_is_safe = False
+    if 'curacao' in combined_text:
+        if any(safe in combined_text for safe in final_safe_curacao): curacao_is_safe = True
+
+    for word in check_forbidden:
+        w_clean = normalize_text(word)
+        if not w_clean: continue
+        
+        # Check Name
+        if w_clean in name_norm:
+             if w_clean == 'bacon' and bacon_is_safe: continue
+             if (w_clean == 'blue curacao' or w_clean == 'curacao') and curacao_is_safe: continue
+             return False, row, f"Forbidden in Name: {word}", "Delete Item", []
+             
+        # Check Desc
+        if w_clean in desc_norm:
+             if w_clean == 'bacon' and bacon_is_safe: continue
+             if (w_clean == 'blue curacao' or w_clean == 'curacao') and curacao_is_safe: continue
+             return False, row, f"Forbidden in Desc: {word}", "Delete Desc & Replace", get_suggestions(item_name)
+
+    choice_separators = ['/', '\\', ' or ', ' OR ']
+    has_separator = any(s in desc_raw_lower for s in choice_separators)
+    choice_indicators = ['choice of', 'choice between', 'choose', 'your choice']
+    has_indicator = any(i in desc_norm for i in choice_indicators)
+    is_between_and = ('between' in desc_norm and 'and' in desc_norm)
+    name_has_option_keyword = any(x in item_name.lower() for x in [' or ', '/', ' & '])
+    set_score = fuzz.token_set_ratio(name_norm, desc_norm)
+    is_valid_choice = (set_score >= 80) or (name_has_option_keyword and set_score >= 60)
+    
+    if (has_indicator or has_separator or is_between_and) and not is_valid_choice:
+         if sheet_type == "Main Menu":
+             if (has_indicator or is_between_and) and not has_separator:
+                 return False, row, "Undefined Choice", "Delete Item", []
+         else:
+             return False, row, "Choices in SEP", "Delete Description", []
+
+    is_mismatch, mis_msg = check_mismatch(name_norm, desc_norm)
+    if is_mismatch:
+        if sheet_type == "Main Menu": return False, row, mis_msg, "Delete Item", []
+        else: return False, row, mis_msg, "Delete Desc & Replace", get_suggestions(item_name)
+
+    for word in generic_words:
+        w_clean = normalize_text(word)
+        if w_clean and w_clean in combined_text:
+            if sheet_type == "Main Menu": return False, row, f"Generic: {word}", "Delete Item", []
+            else: return False, row, f"Generic: {word}", "Delete Desc & Replace", get_suggestions(item_name)
+
+    name_tokens = set(name_norm.split())
+    desc_tokens = set(desc_norm.split())
+    extra_words = desc_tokens - name_tokens
+    common_fillers = {'delicious', 'tasty', 'yummy', 'amazing', 'great', 'best', 'famous', 'signature', 'special', 
+                      'fresh', 'hot', 'cold', 'served', 'with', 'dish', 'plate', 'platter', 'bowl', 'cup', 'glass', 'our'}
+    active_fillers = common_fillers - ad_words
+    
+    if extra_words:
+        all_extras_are_junk = True
+        for w in extra_words:
+            if w not in active_fillers:
+                all_extras_are_junk = False
+                break
+        if all_extras_are_junk:
+             return False, row, "No Value Added", "Delete Desc & Replace", get_suggestions(item_name)
+    else:
+        if fuzz.ratio(name_norm, desc_norm) > 90 and len(desc_norm) > 5:
+             return False, row, "Identical to Name", "Delete Desc & Replace", get_suggestions(item_name)
+
     return True, row, "", "Valid", []
 
 # -----------------------------------------------------------------------------
@@ -308,13 +446,21 @@ def main():
         placeholder = st.empty()
         img_tag = f'<img src="{logo_base64}" class="loading-logo-img"/>' if logo_base64 else '<div style="font-size:4em;">🍊</div>'
         placeholder.markdown(f"""<div id="loading-overlay"><div class="loading-content">{img_tag}<div class="loading-text">Loading...</div></div></div>""", unsafe_allow_html=True)
-        conn_status, generic_words, forbidden_words, ad_words, term_dict, desc_lib_df, safe_bacon, safe_curacao = fetch_settings_data()
+        
+        settings_res = fetch_settings_data()
         time.sleep(1.0)
         placeholder.empty()
         st.session_state.first_load = True
-        st.session_state.settings_data = (conn_status, generic_words, forbidden_words, ad_words, term_dict, desc_lib_df, safe_bacon, safe_curacao)
+        st.session_state.settings_data = settings_res
     else:
-        conn_status, generic_words, forbidden_words, ad_words, term_dict, desc_lib_df, safe_bacon, safe_curacao = st.session_state.settings_data
+        settings_res = st.session_state.settings_data
+
+    if settings_res[0] == False:
+        conn_status = False
+        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = [], [], [], set(), {}, {}, pd.DataFrame(), [], []
+    else:
+        conn_status = True
+        debug_table, generic_words, forbidden_words, ad_words, term_dict, stripped_term_dict, desc_lib_df, safe_bacon, safe_curacao = settings_res[1:]
 
     with st.sidebar:
         col_res, col_tit = st.columns([0.3, 0.7])
@@ -324,6 +470,10 @@ def main():
                 st.rerun()
         
         st.markdown("### ⚙️ Bulk Operations")
+        if st.button("🔄 Update Data", key="update_btn", type="secondary"):
+            st.cache_data.clear()
+            st.rerun()
+            
         sidebar_menu_type = st.radio("Sheet Type", ["Main Menu", "Sep Sheet"], key="bk_type")
         uploaded_file = st.file_uploader("Upload Menu", type=['xlsx', 'csv'])
         
@@ -385,6 +535,10 @@ def main():
                 spin_ph = st.empty()
                 spin_ph.markdown(f'<div id="action-overlay">{spin_html}</div>', unsafe_allow_html=True)
                 
+                # --- BULK CACHE START ---
+                bulk_cache = {} 
+                # ------------------------
+                
                 try:
                     uploaded_file.seek(0)
                     if uploaded_file.name.endswith('.csv'): 
@@ -402,6 +556,8 @@ def main():
                     if 'Item Name' not in df.columns: st.error("Error mapping columns.")
                     else:
                         result_df = df.copy()
+                        total_rows = len(result_df)
+                        progress_bar = st.progress(0)
                         
                         if "Check" in action_mode:
                             result_df['Status'] = 'Valid'; result_df['Error'] = ''; result_df['Action'] = ''
@@ -411,6 +567,7 @@ def main():
                                     result_df.at[idx, 'Status'] = 'Issue'
                                     result_df.at[idx, 'Error'] = err
                                     result_df.at[idx, 'Action'] = act
+                                if idx % 10 == 0: progress_bar.progress(int(idx/total_rows*50))
 
                         if "Translate" in action_mode:
                             if target_name_col not in result_df.columns: result_df[target_name_col] = ''
@@ -419,14 +576,16 @@ def main():
                             result_df['Desc Source'] = ''
                             
                             for idx, row in result_df.iterrows():
-                                t_name, src_n = translate_text_loop_logic(row['Item Name'], term_dict, source_lang)
-                                t_desc, src_d = translate_text_loop_logic(row['Description'], term_dict, source_lang)
+                                t_name, src_n = translate_text_bulk_cached(row['Item Name'], term_dict, stripped_term_dict, source_lang, bulk_cache)
+                                t_desc, src_d = translate_text_bulk_cached(row['Description'], term_dict, stripped_term_dict, source_lang, bulk_cache)
                                 
                                 result_df.at[idx, target_name_col] = t_name
                                 result_df.at[idx, target_desc_col] = t_desc
                                 result_df.at[idx, 'Name Source'] = src_n
                                 result_df.at[idx, 'Desc Source'] = src_d
+                                if idx % 5 == 0: progress_bar.progress(50 + int(idx/total_rows*50))
                         
+                        progress_bar.progress(100)
                         display_df = result_df.copy()
                         display_df.rename(columns={'Item Name': col_name_mapped, 'Description': col_desc_mapped}, inplace=True)
                         all_sheets[current_sheet_name] = display_df
@@ -476,28 +635,31 @@ def main():
         st.markdown('<div class="right-tools-box">', unsafe_allow_html=True)
         with st.expander("🔤 OCT-TERMO", expanded=True):
              st.markdown('<div style="color:#111;">', unsafe_allow_html=True)
+             
+             # GOOGLE KILLER SWITCH
+             allow_google = st.checkbox("Allow Google Fallback?", value=True)
+             
              termo_input = st.text_input("Search Term:", key="float_termo")
              if termo_input:
                  spin_html = f'<img src="{logo_base64}" class="action-logo-spin"/>' if logo_base64 else '🍊'
                  spin_ph = st.empty()
                  spin_ph.markdown(f'<div id="action-overlay">{spin_html}</div>', unsafe_allow_html=True)
                  time.sleep(0.5)
-                 res, src = translate_text_loop_logic(termo_input, term_dict, "English") 
+                 
+                 src_lang_detect = "English"
+                 if re.search(r'[\u0600-\u06FF]', termo_input): src_lang_detect = "Arabic"
+                 
+                 # Using the robust token-wise search
+                 res, src = search_token_wise_core(termo_input, term_dict, stripped_term_dict, allow_google, src_lang_detect) 
+                 
                  spin_ph.empty()
-                 st.markdown(f"<b style='color:#111;'>{res}</b>", unsafe_allow_html=True)
-                 st.caption(f"Src: {src}")
+                 st.markdown(f"<b style='color:#111; font-size:1.5em;'>{res}</b>", unsafe_allow_html=True)
+                 st.caption(f"{src}")
+                 
              st.markdown('</div>', unsafe_allow_html=True)
 
-        with st.expander("🔌 OCT-DATA", expanded=False):
-             st.markdown('<div style="color:#111;">', unsafe_allow_html=True)
-             if conn_status:
-                 st.markdown(f"🚫 Forbidden: <b>{len(forbidden_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"⚠️ Generic: <b>{len(generic_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"✨ Ad Words: <b>{len(ad_words)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"📚 Library: <b>{len(desc_lib_df)}</b>", unsafe_allow_html=True)
-                 st.markdown(f"🔤 Terms: <b>{len(term_dict)}</b>", unsafe_allow_html=True)
-             else: st.error("Disconnected")
-             st.markdown('</div>', unsafe_allow_html=True)
+        # HIDDEN FOR ADMIN
+        # with st.expander("🔌 OCT-DATA", expanded=False): ...
         st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.processed_data is not None:
