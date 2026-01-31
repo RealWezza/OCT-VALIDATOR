@@ -143,20 +143,18 @@ st.markdown("""<ul class="circles"><li></li><li></li><li></li><li></li><li></li>
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_settings_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    empty_res = (False, [], [], [], {}, pd.DataFrame(), [], [])
+    creds = None
+    try: creds = ServiceAccountCredentials.from_json_keyfile_name("service_account.json", scope)
+    except:
+        try: creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(st.secrets["gcp_service_account"]), scope)
+        except: pass
 
-    try:
-        # استخدم st.secrets فقط
-        info = st.secrets["gcp_service_account"]
-        from google.oauth2.service_account import Credentials
-        import gspread
-        creds = Credentials.from_service_account_info(info, scopes=scope)
-        client = gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"Google Sheets authorization failed: {e}")
-        return empty_res
+    empty_res = (None, [], [], [], {}, pd.DataFrame(), [], [])
+    if not creds: return empty_res
 
-    SETTINGS_ID = "15YTSsTS7xspjzyfRWI9vVdiKAMxY125sGinpF4NeTD0"
+    client = gspread.authorize(creds)
+    SETTINGS_ID = "15YTSsTS7xspjzyfRWI9vVdiKAMxY125sGinpF4NeTD0" 
+    
     try:
         sh = client.open_by_key(SETTINGS_ID)
         
@@ -175,24 +173,26 @@ def fetch_settings_data():
         generic_words = get_data(["Generic_Words", "Generic", "Generic Words"], False)
         ad_words = get_data(["Ad_Words", "Ads", "Ad Words"], False)
         forbidden_words = get_data(["Forbidden_Words", "Forbidden", "Forbidden Words"], True)
-        safe_bacon = get_data(["Safe_Bacon", "Safe Bacon"], False)
+        safe_bacon = get_data(["Safe_Bacon", "Safe Bacon"], False) 
         safe_curacao = get_data(["Safe_Curacao", "Safe Curacao"], False)
 
         term_dict = {}
-        try:
+        try: 
             raw_term = sh.worksheet("Terminology").get_all_values()
             if len(raw_term) > 2:
                 for r in raw_term[2:]:
                     if len(r) >= 2:
                         src, tgt = str(r[0]).strip(), str(r[1]).strip()
                         if src and tgt:
+                            # Store exact keys
                             term_dict[src.lower()] = tgt
                             term_dict[tgt.lower()] = src
+                            # Store simplified keys for searching
                             term_dict[normalize_text(src)] = tgt
                             term_dict[normalize_text(tgt)] = src
         except: pass
 
-        try:
+        try: 
             raw_lib = sh.worksheet("Description_Library").get_all_values()
             clean_lib = []
             if len(raw_lib) > 1:
@@ -204,8 +204,7 @@ def fetch_settings_data():
 
         return True, generic_words, forbidden_words, ad_words, term_dict, desc_lib_df, safe_bacon, safe_curacao
 
-    except:
-        return empty_res
+    except: return empty_res
 
 def normalize_text(text):
     if not isinstance(text, str): return str(text)
