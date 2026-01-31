@@ -1,26 +1,4 @@
 import streamlit as st
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-
-st.title("Test Google Sheets Connection")
-
-try:
-    st.write("Secrets keys:", list(st.secrets.keys()))
-    creds_dict = st.secrets["gcp_service_account"]
-
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
-
-    # اختبر فتح شيت (غير الـ SETTINGS_ID بالشيت بتاعك)
-    SETTINGS_ID = "15YTSsTS7xspjzyfRWI9vVdiKAMxY125sGinpF4NeTD0"
-    sh = client.open_by_key(SETTINGS_ID)
-    st.success("✅ Connected to Google Sheet successfully!")
-except Exception as e:
-    st.error(f"❌ Connection failed: {e}")
-
-
-import streamlit as st
 import pandas as pd
 import numpy as np
 import re
@@ -551,3 +529,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
